@@ -1,0 +1,13 @@
+[
+("email@somesite", number_of_days),
+("example@somesite", 5),
+("example@othersite", 2)
+]
+
+# Delete this comment before deploying.
+# That's a python dict that's been dumped to 
+# JSON above. You can edit it by hand or dump
+# it from some other resource as you see fit.
+# bznag will notify each address that there
+# about the list of outstanding bugs as of 
+# that day.

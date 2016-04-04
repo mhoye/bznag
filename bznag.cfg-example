@@ -1,0 +1,10 @@
+{
+"server": "Bugzilla server name",
+"owner": "Service owner within your organization." 
+"user": "Bugzilla API account username. Please use a service account without write privileges.",
+"password": "Bugzilla API account password.",
+"smtp_user": "Outgoing mail server user account. Again, please use either a dummy account or service account",
+"smtp_pass": "Outgoing mail server account password",
+"smtp_server": "Fully-qualified outgoing mail server name."
+}
+
