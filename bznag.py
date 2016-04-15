@@ -11,6 +11,7 @@ import sys
 import re
 import logging, logging.handlers
 import random
+import pprint
 from datetime import date, timedelta
 from os import mkdir
 from bugzilla.agents import BMOAgent
@@ -19,6 +20,8 @@ from email.mime.text import MIMEText
 
 
 def main():
+
+    pp = pprint.PrettyPrinter(indent=4)
 
     fmt = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s',
                             datefmt="%Y-%m-%d %H:%M:%S %Z")
@@ -39,14 +42,8 @@ def main():
     # cfg should be safe to load/handle
     config = json.load(open("/etc/bznag.cfg"))
     recipients = json.load(open("/etc/bznag-participants.cfg"))
-
-    print recipients 
-    mailout = findbugs(config, recipients)
-
-    print mailout
-
-#    sendTriageMail(users, bugs, strs, ranges, config)
-
+    alerts = findbugs(config, recipients)
+    sendSLAMail(alerts, recipients, config)
 
 
 def findbugs(cfg,recs):
@@ -70,10 +67,10 @@ def findbugs(cfg,recs):
         buglist = list()
     # For each person, get the bugs have aged untouched to their level.
     # I'm making a design decision here to make this range window only
-    # 7 days long - bugs older than that are being actively ignored.
+    # 2 days long - bugs older than that are being actively ignored.
 
         sla = recs[ppl]
-        inc = 1
+        inc = 7
 
         date_to    = str(date.isoformat(date.today() - timedelta(sla))).encode("utf8")
         date_from  = str(date.isoformat(date.today() - timedelta(sla+inc))).encode("utf8")
@@ -91,169 +88,74 @@ def findbugs(cfg,recs):
                 'changed_before':   date_to,
                 'product':  'Firefox',
                 'status':   'UNCONFIRMED'  },
-#             'core': {
-#                 'changed_field':'[Bug creation]',
-#                 'changed_after':date_from,
-#                 'changed_before':   date_to,
-#                 'product':  'Core',
-#                 'status':   'UNCONFIRMED'  },
-#             'toolkit': {
-#                 'changed_field':'[Bug creation]',
-#                 'changed_after':date_from,
-#                 'changed_before':   date_to,
-#                 'product':  'Toolkit',
-#                 'status':   'UNCONFIRMED'},
-#             'firefox_untriaged': {
-#                 'changed_field':'[Bug creation]',
-#                 'changed_after':date_from,
-#                 'changed_before':   date_to,
-#                 'product':  'Firefox',
-#                 'component':'Untriaged'},
-#             'core_untriaged': {
-#                 'changed_field':'[Bug creation]',
-#                 'changed_after':date_from,
-#                 'changed_before':   date_to,
-#                 'product':  'Toolkit',
-#                 'component':'Untriaged'},
-#             'toolkit_untriaged': {
-#                 'changed_field':'[Bug creation]',
-#                 'changed_after':date_from,
-#                 'changed_before':   date_to,
-#                 'product':  'Core',
-#                 'component':'Untriaged'
-#               },
-            }
+             'core': {
+                 'changed_field':'[Bug creation]',
+                 'changed_after':date_from,
+                 'changed_before':   date_to,
+                 'product':  'Core',
+                 'status':   'UNCONFIRMED'  },
+             'toolkit': {
+                 'changed_field':'[Bug creation]',
+                 'changed_after':date_from,
+                 'changed_before':   date_to,
+                 'product':  'Toolkit',
+                 'status':   'UNCONFIRMED'},
+             'firefox_untriaged': {
+                 'changed_field':'[Bug creation]',
+                 'changed_after':date_from,
+                 'changed_before':   date_to,
+                 'product':  'Firefox',
+                 'component':'Untriaged'},
+             'core_untriaged': {
+                 'changed_field':'[Bug creation]',
+                 'changed_after':date_from,
+                 'changed_before':   date_to,
+                 'product':  'Toolkit',
+                 'component':'Untriaged'},
+             'toolkit_untriaged': {
+                 'changed_field':'[Bug creation]',
+                 'changed_after':date_from,
+                 'changed_before':   date_to,
+                 'product':  'Core',
+                 'component':'Untriaged'
+               },
+           }
 
+        bugs = list()
         for options in option_sets.values():
-            bugs = bzagent.get_bug_list(options) 
+            for b in bzagent.get_bug_list(options):
+                if str(b.creation_time) == str(b.last_change_time):
+                    bugs.append(b)
+                    print str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
             buglist = list(set(buglist + bugs)) #add and dedupe
-        
+            
         notif[ppl] = buglist
-
-        
-
-
 
     return ( notif ) 
 
+def sendSLAMail(mailout,sla,cfg):
 
-
-def sendTriageMail(people, buglist, rangelist, stepslist, cfg):
-
-    random.shuffle(people)
-    random.shuffle(buglist) 
-    random.shuffle(rangelist)
-    random.shuffle(stepslist)
-
-    triagemail  = dict()
-    stepsmail   = dict()
-    rangemail   = dict()
-
-
-    while True:
-        if not people:
-            break
-        if not rangelist and not stepslist and not buglist: #once we've emptied one of them out...
-            break
-        for t in people:
-            if not t[0] in rangemail:
-                rangemail[t[0]] = []
-            if not t[0] in stepsmail:
-                stepsmail[t[0]] = []
-            if not t[0] in triagemail:
-                triagemail[t[0]] = []
-
-            if len(triagemail[t[0]]) + len(rangemail[t[0]]) + len(stepsmail[t[0]])  >= int(t[2]):
-                people.remove(t)
-                continue
-            while buglist or rangelist or stepslist:
-                if t[4] == "on" and rangelist: 
-                        rangemail[t[0]].append(rangelist.pop())
-                        break
-                if t[5] == "on" and stepslist: 
-                        stepsmail[t[0]].append(stepslist.pop())
-                        break
-                if t[0] in triagemail and buglist:
-                    triagemail[t[0]].append(buglist.pop())
-                    break
 
     # Ok, let's email some bugs.
 
-    participants = list(set(triagemail.keys() + stepsmail.keys() + rangemail.keys()))
-
     mailoutlog = ""
-    for rec in participants:
-        mailoutlog = rec.encode("utf8")
-        content = "Hello, " + rec.encode("utf8") + '''
-
-Bug triage is the most important part of a program's life. We're building a smarter, faster Firefox for a smarter, faster Web, and we're grateful for your help.
-
-Thank you.
-
-'''
-
-    if triagemail[rec]:
-        content += '''
-
-Today we would like your help triaging the following bugs:
-
-'''
+    for recipient in mailout.keys():
+        mailoutlog = recipient.encode("utf8")
+        content = "As part of Mozilla's triage SLA process, you have asked to be notified\n" + \
+                  "when new bugs have gone " + str(sla[recipient]) + " days without being acted upon.\n"
+        content += "The following bugs have met that criteria:\n\n" 
         bugurls = ""
-        for boog in triagemail[rec]:
+        for boog in mailout[recipient]:
             mailoutlog += " " + str(boog.id).encode("utf-8")
             bugurls += '''Bug %s - http://bugzilla.mozilla.org/%s - %s
 
 ''' % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
         content += bugurls
-
-    if rangemail[rec]:
-        content += '''
-
-Our engineers have asked for help finding a regression range for these bugs:
-
-'''
-        bugurls = ""
-        for boog in rangemail[rec]:
-            mailoutlog += " " + str(boog.id).encode("utf-8")
-            bugurls += '''Bug %s - http://bugzilla.mozilla.org/%s - %s
-
-''' % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
-        content += bugurls
-
-    if stepsmail[rec]:
-        content += '''
-
-We need to figure out the steps to reproduce the following bugs:
-
-'''
-        bugurls = ""
-        for boog in stepsmail[rec]:
-            mailoutlog += " " + str(boog.id).encode("utf-8")
-            bugurls += '''Bug %s - http://bugzilla.mozilla.org/%s - %s
-
-''' % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
-        content += bugurls
+        content += "\nPlease examine these bugs at your earliest convenience, and either move them\n" +\
+                   "to the correct category or assign them to or needinfo a developer.\n\n" +\
+                   "If you have any questions about this notification service, please contact Mike Hoye."
 
 
-        content += '''
-
-There are a few things you can do to move these bugs forward:
-
-  - Most importantly, sort the bug into the correct component: https://developer.mozilla.org/en-US/docs/Mozilla/QA/Confirming_unconfirmed_bugs
-  - Use MozRegression to figure out exactly when a bug was introduced. You can learn about MozRegression here: http://mozilla.github.io/mozregression/
-  - Search for similar bugs or duplicates and link them together if found: https://bugzilla.mozilla.org/duplicates.cgi
-  - Check the flags, title and description for clarity and precision
-  - Ask the reporter for related crash reports in about:crashes https://developer.mozilla.org/en-US/docs/Crash_reporting
-  - Does this look like a small fix? Add [good first bug] to the whiteboard!
-
-If you're just getting started and aren't sure how to proceed, this link will help:
-  - https://developer.mozilla.org/en-US/docs/Mozilla/QA/Triaging_Bugs_for_Firefox
-
-As always, the point of this exercise is to get the best information possible in front the right engineers. If you can reproduce them or isolate a test case, please add that information to the bug and change the status from "UNCONFIRMED" to "NEW".
-
-Again, thank you. If you have any questions or concerns about the this process, you can join us on IRC in the #triage channel, or email Mike Hoye - mhoye@mozilla.com - directly.
-
-'''
         smtp = cfg["smtp_server"].encode("utf8")
         sender = cfg["smtp_user"].encode("utf8")
         server = smtplib.SMTP(smtp)
@@ -264,9 +166,9 @@ Again, thank you. If you have any questions or concerns about the this process, 
         msg = MIMEText(str(content).encode("utf8"))
         msg["Subject"] = str("Bugs to triage for %s" % (date.today()) ).encode("utf8")
         msg["From"] = cfg["smtp_user"].encode("utf8")
-        msg["To"] = rec.encode("utf8")
+        msg["To"] = recipient.encode("utf8")
         #msg["Reply-To"] = "noreply@mozilla.com"
-        server.sendmail(sender, rec.encode("utf8") , msg.as_string())
+        server.sendmail(sender, recipient.encode("utf8") , msg.as_string())
         server.quit()
         logging.info(mailoutlog)
 
