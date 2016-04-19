@@ -41,7 +41,7 @@ def main():
 
     # cfg should be safe to load/handle
     config = json.load(open("/etc/bznag.cfg"))
-    recipients = json.load(open("/etc/bznag-participants.cfg"))
+    recipients = json.load(open("/var/local/bznag/bznag-participants.cfg"))
     alerts = findbugs(config, recipients)
     sendSLAMail(alerts, recipients, config)
 

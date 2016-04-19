@@ -1,8 +1,8 @@
-[
-("email@somesite", number_of_days),
-("example@somesite", 5),
-("example@othersite", 2)
-]
+{
+"email@somesite": number_of_days,
+"example@somesite": 5),
+"example@othersite": 2,
+}
 
 # Delete this comment before deploying.
 # That's a python dict that's been dumped to 
