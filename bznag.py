@@ -70,7 +70,7 @@ def findbugs(cfg,recs):
     # 2 days long - bugs older than that are being actively ignored.
 
         sla = recs[ppl]
-        inc = 7
+        inc = 1
 
         date_to    = str(date.isoformat(date.today() - timedelta(sla))).encode("utf8")
         date_from  = str(date.isoformat(date.today() - timedelta(sla+inc))).encode("utf8")
