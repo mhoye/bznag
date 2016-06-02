@@ -1,6 +1,6 @@
 {
 "email@somesite": number_of_days,
-"example@somesite": 5),
+"example@somesite": 5,
 "example@othersite": 2,
 }
 
