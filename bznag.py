@@ -43,6 +43,7 @@ def main():
     config = json.load(open("/etc/bznag.cfg"))
     recipients = json.load(open("/var/local/bznag/bznag-participants.cfg"))
     alerts = findbugs(config, recipients)
+
     sendSLAMail(alerts, recipients, config)
 
 
@@ -70,7 +71,7 @@ def findbugs(cfg,recs):
     # 2 days long - bugs older than that are being actively ignored.
 
         sla = recs[ppl]
-        inc = 7
+        inc = 1
 
         date_to    = str(date.isoformat(date.today() - timedelta(sla))).encode("utf8")
         date_from  = str(date.isoformat(date.today() - timedelta(sla+inc))).encode("utf8")
@@ -82,24 +83,6 @@ def findbugs(cfg,recs):
 
 
         option_sets = {
-             'firefox': {
-                'changed_field':'[Bug creation]',
-                'changed_after':date_from,
-                'changed_before':   date_to,
-                'product':  'Firefox',
-                'status':   'UNCONFIRMED'  },
-             'core': {
-                 'changed_field':'[Bug creation]',
-                 'changed_after':date_from,
-                 'changed_before':   date_to,
-                 'product':  'Core',
-                 'status':   'UNCONFIRMED'  },
-             'toolkit': {
-                 'changed_field':'[Bug creation]',
-                 'changed_after':date_from,
-                 'changed_before':   date_to,
-                 'product':  'Toolkit',
-                 'status':   'UNCONFIRMED'},
              'firefox_untriaged': {
                  'changed_field':'[Bug creation]',
                  'changed_after':date_from,
@@ -135,42 +118,41 @@ def findbugs(cfg,recs):
 
 def sendSLAMail(mailout,sla,cfg):
 
-
+    msg = dict()
     # Ok, let's email some bugs.
 
     mailoutlog = ""
     for recipient in mailout.keys():
-        mailoutlog = recipient.encode("utf8")
-        content = "As part of Mozilla's triage SLA process, you have asked to be notified\n" + \
-                  "when new bugs have gone " + str(sla[recipient]) + " days without being acted upon.\n"
-        content += "The following bugs have met that criteria:\n\n" 
-        bugurls = ""
-        for boog in mailout[recipient]:
-            mailoutlog += " " + str(boog.id).encode("utf-8")
-            bugurls += '''Bug %s - http://bugzilla.mozilla.org/%s - %s
-
-''' % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
-        content += bugurls
-        content += "\nPlease examine these bugs at your earliest convenience, and either move them\n" +\
-                   "to the correct category or assign them to or needinfo a developer.\n\n" +\
-                   "If you have any questions about this notification service, please contact Mike Hoye."
-
-
-        smtp = cfg["smtp_server"].encode("utf8")
-        sender = cfg["smtp_user"].encode("utf8")
-        server = smtplib.SMTP(smtp)
-        server.set_debuglevel(True)
-        #server.connect(smtp)
-        server.ehlo()
-        #server.login(sender, cfg["smtp_pass"].encode("utf8"))
-        msg = MIMEText(str(content).encode("utf8"))
-        msg["Subject"] = str("Bugs to triage for %s" % (date.today()) ).encode("utf8")
-        msg["From"] = cfg["smtp_user"].encode("utf8")
-        msg["To"] = recipient.encode("utf8")
-        #msg["Reply-To"] = "noreply@mozilla.com"
-        server.sendmail(sender, recipient.encode("utf8") , msg.as_string())
-        server.quit()
-        logging.info(mailoutlog)
+        if mailout[recipient]:
+            mailoutlog = recipient.encode("utf8")
+            content = "As part of Mozilla's triage SLA process, you have asked to be notified\n" + \
+                      "when new bugs have gone " + str(sla[recipient]) + " days without being acted upon.\n"
+            content += "The following bugs have met that criteria:\n\n" 
+            bugurls = ""
+            for boog in mailout[recipient]:
+                mailoutlog += " " + str(boog.id).encode("utf-8")
+                bugurls += '''Bug %s - http://bugzilla.mozilla.org/%s - %s ''' \
+                        % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
+            content += bugurls
+            content += "\nPlease examine these bugs at your earliest convenience, and either move them\n" +\
+                       "to the correct category or assign them to or needinfo a developer.\n\n" +\
+                       "If you have any questions about this notification service, please contact Mike Hoye."
+            smtp = cfg["smtp_server"].encode("utf8")
+            sender = cfg["smtp_user"].encode("utf8")
+            server = smtplib.SMTP(smtp)
+            server.set_debuglevel(True)
+            #server.connect(smtp)
+            server.ehlo()
+            #server.login(sender, cfg["smtp_pass"].encode("utf8"))
+            msg = MIMEText(str(content).encode("utf8"))
+            msg["Subject"] = str("NagBot: Untriaged bugs as of %s" % (date.today()) ).encode("utf8")
+            msg["From"] = cfg["smtp_user"].encode("utf8")
+            msg["To"] = recipient.encode("utf8")
+            msg["Bcc"] = str("mhoye@mozilla.com").encode("utf8")
+            server.sendmail(sender, recipient.encode("utf8") , msg.as_string())
+            server.quit()
+            logging.info(mailoutlog)
+            print msg.as_string()
 
 if __name__ == "__main__":
     main()
