@@ -46,6 +46,15 @@ def main():
 
     sendSLAMail(alerts, recipients, config)
 
+    
+    pp.pprint(alerts)
+    pp.pprint(recipients)
+    pp.pprint(config)
+
+
+    for derp in alerts.keys():
+        pp.pprint(alerts[derp]['stale'])
+
 
 def findbugs(cfg,recs):
 
@@ -71,48 +80,80 @@ def findbugs(cfg,recs):
     # 2 days long - bugs older than that are being actively ignored.
 
         sla = recs[ppl]
-        inc = 1
+        inc = 1 
 
+    # If it's a Monday, scan the last three days. Otherwise only the last one.
+    # The cron job that kicks off this clownshow should only be running mon/fri.
+
+        if (date.today().weekday() == 0): 
+            inc = 3
+        week_inc = inc + 5
         date_to    = str(date.isoformat(date.today() - timedelta(sla))).encode("utf8")
         date_from  = str(date.isoformat(date.today() - timedelta(sla+inc))).encode("utf8")
+        stale_time = str(date.isoformat(date.today() - timedelta(sla+week_inc+inc))).encode("utf8")
 
     # Not proud of this next part. Store this properly in a file somewhere, you donkus.
 
     # NOTE: The reason it's laid out like this is because bztools doesn't,
     # seem to work with the "product=foo,bar" syntax, despite what the docs say
+        untriaged_bugs = list()
 
-
-        option_sets = {
+        untriaged_params= {
              'firefox_untriaged': {
                  'changed_field':'[Bug creation]',
                  'changed_after':date_from,
-                 'changed_before':   date_to,
+                 'changed_before':date_to,
                  'product':  'Firefox',
                  'component':'Untriaged'},
              'core_untriaged': {
                  'changed_field':'[Bug creation]',
                  'changed_after':date_from,
-                 'changed_before':   date_to,
+                 'changed_before':date_to,
                  'product':  'Toolkit',
                  'component':'Untriaged'},
              'toolkit_untriaged': {
                  'changed_field':'[Bug creation]',
                  'changed_after':date_from,
-                 'changed_before':   date_to,
+                 'changed_before':date_to,
                  'product':  'Core',
-                 'component':'Untriaged'
-               },
-           }
+                 'component':'Untriaged' }
+              }
 
-        bugs = list()
-        for options in option_sets.values():
+        bugs = set()
+        for options in untriaged_params.values():
             for b in bzagent.get_bug_list(options):
                 if str(b.creation_time) == str(b.last_change_time):
-                    bugs.append(b)
+                    bugs.add(b)
                     print str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
-            buglist = list(set(buglist + bugs)) #add and dedupe
-            
-        notif[ppl] = buglist
+
+        untriaged_bugs = list(bugs) #add and dedupe
+
+        stale_bugs = list()
+        stale_params = {
+            "firefox_stale_bug": {
+                "product":  "Core",
+                "last_change_time":stale_time,
+                "component":"Untriaged" },
+            "core_stale_bug": {
+                "last_change_time":stale_time,
+                "product":  "Core",
+                "component":"Untriaged" },
+            "toolkit_stale_bug": {
+                "last_change_time":stale_time,
+                "product":  "Core",
+                "component":"Untriaged" }
+            }
+
+        bugs = set()
+        for options in stale_params.values():
+            for b in bzagent.get_bug_list(options): 
+                bugs.add(b)
+                print str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
+
+        stale_bugs = list(bugs) # (this is so sloppy)
+
+           
+        notif[ppl] = { "untriaged": untriaged_bugs, "stale": stale_bugs }
 
     return ( notif ) 
 
@@ -123,18 +164,24 @@ def sendSLAMail(mailout,sla,cfg):
 
     mailoutlog = ""
     for recipient in mailout.keys():
-        if mailout[recipient]:
+        if (mailout[recipient]['untriaged'] or mailout[recipient]['stale']):
             mailoutlog = recipient.encode("utf8")
-            content = "As part of Mozilla's triage SLA process, you have asked to be notified\n" + \
-                      "when new bugs have gone " + str(sla[recipient]) + " days without being acted upon.\n"
-            content += "The following bugs have met that criteria:\n\n" 
-            bugurls = ""
-            for boog in mailout[recipient]:
-                mailoutlog += " " + str(boog.id).encode("utf-8")
-                bugurls += '''Bug %s - http://bugzilla.mozilla.org/%s - %s ''' \
-                        % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
-            content += bugurls
-            content += "\nPlease examine these bugs at your earliest convenience, and either move them\n" +\
+            content = "This is a message from Mozilla's NagBot.\n\n"
+            if mailout[recipient]['untriaged']:
+                content += "You have asked receive notifications when Untriaged bugs have gone " + str(sla[recipient]) + " days without being acted upon.\n"
+                content += "The following bugs have met that criteria:\n\n" 
+                for boog in mailout[recipient]['untriaged']:
+                    mailoutlog += " " + str(boog.id).encode("utf-8")
+                    content += '''Bug %s - http://bugzilla.mozilla.org/%s - %s\n''' \
+                            % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
+            if mailout[recipient]['stale']:
+                content += "\nThe following bugs are still in an Untriaged component, and have not been acted on in " + str(sla[recipient] + 5 ) + " days.\n"
+                content += "These bugs are getting stale:\n\n" 
+                for boog in mailout[recipient]['stale']:
+                    mailoutlog += " " + str(boog.id).encode("utf-8")
+                    content += '''Bug %s - http://bugzilla.mozilla.org/%s - %s\n''' \
+                            % ( str(boog.id).encode("utf-8"), str(boog.id).encode("utf-8"), str(boog.summary).encode("utf-8") )
+            content += "\n\nPlease examine these bugs at your earliest convenience, and either move them\n" +\
                        "to the correct category or assign them to or needinfo a developer.\n\n" +\
                        "If you have any questions about this notification service, please contact Mike Hoye."
             smtp = cfg["smtp_server"].encode("utf8")
@@ -145,10 +192,10 @@ def sendSLAMail(mailout,sla,cfg):
             server.ehlo()
             #server.login(sender, cfg["smtp_pass"].encode("utf8"))
             msg = MIMEText(str(content).encode("utf8"))
-            msg["Subject"] = str("NagBot: Untriaged bugs as of %s" % (date.today()) ).encode("utf8")
+            msg["Subject"] = str("NagBot Trial: Untriaged bugs as of %s" % (date.today()) ).encode("utf8")
             msg["From"] = cfg["smtp_user"].encode("utf8")
             msg["To"] = recipient.encode("utf8")
-            msg["Bcc"] = str("mhoye@mozilla.com").encode("utf8")
+            msg["BCC"] = str("mhoye@mozilla.com").encode("utf8")
             server.sendmail(sender, recipient.encode("utf8") , msg.as_string())
             server.quit()
             logging.info(mailoutlog)
