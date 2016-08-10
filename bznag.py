@@ -133,15 +133,18 @@ def findbugs(cfg,recs):
         stale_params = {
             "firefox_stale_bug": {
                 "product":  "Core",
+                "bug_status": "UNCONFIRMED,NEW,ASSIGNED",
                 "last_change_time":stale_time,
                 "component":"Untriaged" },
             "core_stale_bug": {
                 "last_change_time":stale_time,
+                "bug_status": "UNCONFIRMED,NEW,ASSIGNED",
                 "product":  "Core",
                 "component":"Untriaged" },
             "toolkit_stale_bug": {
                 "last_change_time":stale_time,
                 "product":  "Core",
+                "bug_status": "UNCONFIRMED,NEW,ASSIGNED",
                 "component":"Untriaged" }
             }
 
@@ -194,7 +197,7 @@ def sendSLAMail(mailout,sla,cfg):
             server.ehlo()
             #server.login(sender, cfg["smtp_pass"].encode("utf8"))
             msg = MIMEText(str(content).encode("utf8"))
-            msg["Subject"] = str("NagBot Trial: Untriaged bugs as of %s" % (date.today()) ).encode("utf8")
+            msg["Subject"] = str("NagBot: Untriaged bugs as of %s" % (date.today()) ).encode("utf8")
             msg["From"] = cfg["smtp_user"].encode("utf8")
             msg["To"] = recipient.encode("utf8")
             msg["BCC"] = str("mhoye@mozilla.com").encode("utf8")
