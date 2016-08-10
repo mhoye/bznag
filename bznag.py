@@ -80,6 +80,7 @@ def findbugs(cfg,recs):
     # 2 days long - bugs older than that are being actively ignored.
 
         sla = recs[ppl]
+        print str(ppl) + " " + str(sla)
         inc = 1 
 
     # If it's a Monday, scan the last three days. Otherwise only the last one.
@@ -88,9 +89,9 @@ def findbugs(cfg,recs):
         if (date.today().weekday() == 0): 
             inc = 3
         week_inc = inc + 5
-        date_to    = str(date.isoformat(date.today() - timedelta(sla))).encode("utf8")
-        date_from  = str(date.isoformat(date.today() - timedelta(sla+inc))).encode("utf8")
-        stale_time = str(date.isoformat(date.today() - timedelta(sla+week_inc+inc))).encode("utf8")
+        date_to    = str(date.isoformat(date.today() - timedelta(sla + 1) )).encode("utf8")
+        date_from  = str(date.isoformat(date.today() - timedelta(sla + inc + 1) )).encode("utf8")
+        stale_time = str(date.isoformat(date.today() - timedelta(sla + week_inc + inc + 1) )).encode("utf8")
 
     # Not proud of this next part. Store this properly in a file somewhere, you donkus.
 
@@ -124,7 +125,7 @@ def findbugs(cfg,recs):
             for b in bzagent.get_bug_list(options):
                 if str(b.creation_time) == str(b.last_change_time):
                     bugs.add(b)
-                    print str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
+                    print "Untriaged:" + str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
 
         untriaged_bugs = list(bugs) #add and dedupe
 
@@ -145,10 +146,11 @@ def findbugs(cfg,recs):
             }
 
         bugs = set()
+        # juuuust subtly different.
         for options in stale_params.values():
             for b in bzagent.get_bug_list(options): 
                 bugs.add(b)
-                print str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
+                print "Stale:" + str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
 
         stale_bugs = list(bugs) # (this is so sloppy)
 
@@ -199,7 +201,7 @@ def sendSLAMail(mailout,sla,cfg):
             server.sendmail(sender, recipient.encode("utf8") , msg.as_string())
             server.quit()
             logging.info(mailoutlog)
-            print msg.as_string()
+            #print msg.as_string()
 
 if __name__ == "__main__":
     main()
