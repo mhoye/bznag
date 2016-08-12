@@ -93,10 +93,9 @@ def findbugs(cfg,recs):
         date_from  = str(date.isoformat(date.today() - timedelta(sla + inc + 1) )).encode("utf8")
         stale_time = str(date.isoformat(date.today() - timedelta(sla + week_inc + inc + 1) )).encode("utf8")
 
+        print str("Stale date:") + str(stale_time)
     # Not proud of this next part. Store this properly in a file somewhere, you donkus.
 
-    # NOTE: The reason it's laid out like this is because bztools doesn't,
-    # seem to work with the "product=foo,bar" syntax, despite what the docs say
         untriaged_bugs = list()
 
         untriaged_params= {
@@ -134,26 +133,25 @@ def findbugs(cfg,recs):
             "firefox_stale_bug": {
                 "product":  "Core",
                 "bug_status": "UNCONFIRMED,NEW,ASSIGNED",
-                "last_change_time":stale_time,
                 "component":"Untriaged" },
             "core_stale_bug": {
-                "last_change_time":stale_time,
                 "bug_status": "UNCONFIRMED,NEW,ASSIGNED",
                 "product":  "Core",
                 "component":"Untriaged" },
             "toolkit_stale_bug": {
-                "last_change_time":stale_time,
                 "product":  "Core",
                 "bug_status": "UNCONFIRMED,NEW,ASSIGNED",
                 "component":"Untriaged" }
             }
 
         bugs = set()
+
         # juuuust subtly different.
         for options in stale_params.values():
             for b in bzagent.get_bug_list(options): 
-                bugs.add(b)
-                print "Stale:" + str(b.id) + " - " + str(b.creation_time) + " - " + str(b.last_change_time) 
+                if str(b.creation_time) == stale_time:
+                    bugs.add(b)
+                    print "Stale:" + str(b.id) + " - " + str(b.last_change_time) 
 
         stale_bugs = list(bugs) # (this is so sloppy)
 
@@ -192,7 +190,7 @@ def sendSLAMail(mailout,sla,cfg):
             smtp = cfg["smtp_server"].encode("utf8")
             sender = cfg["smtp_user"].encode("utf8")
             server = smtplib.SMTP(smtp)
-            server.set_debuglevel(True)
+            #server.set_debuglevel(True)
             #server.connect(smtp)
             server.ehlo()
             #server.login(sender, cfg["smtp_pass"].encode("utf8"))
